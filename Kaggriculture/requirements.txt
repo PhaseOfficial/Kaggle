@@ -1,0 +1,23 @@
+# Kaggle & Simulation
+kaggle-environments
+kaggle
+gymnasium
+
+# Data Science & Numerical Computing
+numpy
+pandas
+scipy
+scikit-learn
+
+# Deep Learning / Optimization
+torch
+
+# Visualization
+matplotlib
+seaborn
+
+# Development & Notebooks
+ipykernel
+ipywidgets
+tqdm
+pytest
