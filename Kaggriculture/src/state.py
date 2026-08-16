@@ -120,3 +120,27 @@ class FarmState:
                     if t.get("yield_units", 0) > 0:
                         ready.append((x, y))
         return ready
+
+    def get_animals_needing_feed(self) -> list[tuple[int, int]]:
+        needs_feed = []
+        for x, y in self.get_all_unlocked_coords():
+            t = self.get_tile(x, y)
+            if isinstance(t, dict) and t.get("animal") and not t.get("fed_today", False):
+                needs_feed.append((x, y))
+        return needs_feed
+
+    def get_animals_needing_care(self) -> list[tuple[int, int]]:
+        needs_care = []
+        for x, y in self.get_all_unlocked_coords():
+            t = self.get_tile(x, y)
+            if isinstance(t, dict) and t.get("animal") and not t.get("cared_today", False):
+                needs_care.append((x, y))
+        return needs_care
+
+    def get_animals_with_fertilizer(self) -> list[tuple[int, int]]:
+        has_fert = []
+        for x, y in self.get_all_unlocked_coords():
+            t = self.get_tile(x, y)
+            if isinstance(t, dict) and t.get("animal") and t.get("fertilizer_available", False):
+                has_fert.append((x, y))
+        return has_fert

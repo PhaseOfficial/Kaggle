@@ -75,17 +75,18 @@ class MultiWorkerDispatcher:
         worker_actions = []
         available_seeds = dict(self.state.seeds)
 
-        for w_idx, w_pos in enumerate(workers):
+        for w_idx, w_pos in enumerate(self.workers):
             tile = self.state.get_tile(*w_pos)
             action = None
             assigned_quad = worker_quad_map.get(w_idx, "NW")
             inv_w = self.state.inventories[w_idx] if w_idx < len(self.state.inventories) else {}
             has_fert = inv_w.get("FERTILIZER", 0) > 0
 
-            # --- A. Farmer Special: Pickup Animal / Fertilizer from Shed ---
-            if w_idx == 0 and day <= 24:
+            # --- A. Farmer Special: Setup animals & Feed Pickup ---
+            if w_idx == 0 and day <= 28:
                 has_animal_in_inv = any(inv_w.get(a, 0) > 0 for a in ["COW", "SHEEP"])
                 has_animal_in_shed = any(self.state.shed.get(a, 0) > 0 for a in ["COW", "SHEEP"])
+                needs_feed_count = sum(1 for p in active_livestock if isinstance(self.state.get_tile(*p), dict) and self.state.get_tile(*p).get("animal") and not self.state.get_tile(*p).get("fed_today", False))
 
                 if not has_animal_in_inv and has_animal_in_shed:
                     if w_pos == (4, 4):
@@ -112,11 +113,17 @@ class MultiWorkerDispatcher:
                                         action = ["PLACE", anim]
                                 break
 
+                # If standing at shed and animals need food, pick up wheat!
+                elif w_pos == (4, 4) and needs_feed_count > 0 and inv_w.get("WHEAT", 0) < needs_feed_count and self.state.shed.get("WHEAT", 0) > 0:
+                    pickup_n = min(needs_feed_count - inv_w.get("WHEAT", 0), self.state.shed.get("WHEAT", 0))
+                    if pickup_n > 0:
+                        action = ["PICKUP", "WHEAT", pickup_n]
+
             # --- B. Livestock Care on Standing Plot ---
             if action is None and w_pos in active_livestock and w_pos not in assigned_targets:
                 req_struct, req_animal = active_livestock[w_pos]
                 if isinstance(tile, dict) and tile.get("animal"):
-                    if not tile.get("fed_today", False) and w_pos not in fed_animals_today and (self.state.shed.get("WHEAT", 0) > 0 or inv_w.get("WHEAT", 0) > 0):
+                    if not tile.get("fed_today", False) and w_pos not in fed_animals_today and inv_w.get("WHEAT", 0) > 0:
                         action = ["FEED"]
                         fed_animals_today.add(w_pos)
                         assigned_targets.add(w_pos)

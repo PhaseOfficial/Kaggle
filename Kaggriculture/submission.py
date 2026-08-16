@@ -262,7 +262,7 @@ def get_target_crop_for_pos(pos: tuple[int, int], remaining_days: int, day: int)
         if day <= 10:
             return "MELON"
         elif day <= 25:
-            return "STRAWBERRY"  # Plant Strawberry after Melon!
+            return "STRAWBERRY"  # Plant Strawberry after Melon (fertilized by nearby animals!)
         return "WHEAT"
 
     # Plot 2 (NE): Covers x in [5, 9], y in [0, 4] -> HIGH-YIELD WATERMELON PRODUCTION (Days 0-19)
@@ -273,8 +273,10 @@ def get_target_crop_for_pos(pos: tuple[int, int], remaining_days: int, day: int)
             return "WHEAT"
         return "WHEAT"
 
-    # Plot 3 (SW): Covers x in [0, 4], y in [5, 9] -> Wheat
+    # Plot 3 (SW): Covers x in [0, 4], y in [5, 9] -> Wheat & Targeted Melons
     if pos[0] < 5 and pos[1] >= 5:
+        if day <= 15 and remaining_days >= 10 and (pos[0] + pos[1]) % 3 == 0:
+            return "MELON"
         return "WHEAT"
 
     # Plot 4 (SE): Covers x in [5, 9], y in [5, 9] -> Wheat
@@ -294,7 +296,7 @@ class MasterIndustrialAgent:
         num_quads = len(state.unlocked_quadrants)
 
         # 1. CONTINUOUS WORKFORCE HIRING
-        target_hires = 5 if num_quads == 1 else (8 if num_quads == 2 else (10 if num_quads == 3 else 12))
+        target_hires = 5 if num_quads == 1 else (7 if num_quads == 2 else 9)
         needed_hires = max(0, target_hires - state.hires_today)
         if day <= 29 and money >= 12 and needed_hires > 0:
             for _ in range(needed_hires):
@@ -309,8 +311,8 @@ class MasterIndustrialAgent:
         total_cows_held = sum(1 for p, info in LIVESTOCK_TILES["NW"].items() if info[1] == "COW" and isinstance(state.get_tile(*p), dict) and state.get_tile(*p).get("animal") == "COW") + state.shed.get("COW", 0) + sum(inv.get("COW", 0) for inv in state.inventories)
         total_sheep_held = sum(1 for p, info in LIVESTOCK_TILES["NW"].items() if info[1] == "SHEEP" and isinstance(state.get_tile(*p), dict) and state.get_tile(*p).get("animal") == "SHEEP") + state.shed.get("SHEEP", 0) + sum(inv.get("SHEEP", 0) for inv in state.inventories)
 
-        # Procure animals on Day 2+ once wheat feed is available
-        if (day >= 2 or state.shed.get("WHEAT", 0) >= 5) and day <= 20 and len(orders) < max_orders:
+        # Procure animals on Day 1+ once wheat feed is available
+        if (day >= 1 or state.shed.get("WHEAT", 0) >= 3) and day <= 20 and len(orders) < max_orders:
             while total_cows_held < target_cows and money >= 500 and len(orders) < max_orders:
                 orders.append(["BUY_ANIMAL", "COW", 1])
                 money -= 400
@@ -323,19 +325,15 @@ class MasterIndustrialAgent:
 
         all_plot1_fully_stocked = (total_cows_held >= target_cows and total_sheep_held >= target_sheep)
 
-        # 3. Cyclic Land Expansion with Zero-Loss Protection (Plot 1 must have 4 animals stocked)
-        if day <= 23 and len(orders) < max_orders and all_plot1_fully_stocked:
-            if "NE" not in state.unlocked_quadrants and money >= 4000 and day <= 16:
+        # 3. Controlled Land Expansion (NE and SW only with Capital Protection)
+        if day <= 20 and len(orders) < max_orders and all_plot1_fully_stocked:
+            if "NE" not in state.unlocked_quadrants and money >= 2500 and day <= 8:
                 orders.append(["BUY_LAND", "NE"])
                 money -= 1000
                 num_quads += 1
-            elif "SW" not in state.unlocked_quadrants and money >= 6000 and day <= 20:
+            elif "SW" not in state.unlocked_quadrants and money >= 5000 and day <= 15:
                 orders.append(["BUY_LAND", "SW"])
                 money -= 2000
-                num_quads += 1
-            elif "SE" not in state.unlocked_quadrants and money >= 12000 and day <= 23:
-                orders.append(["BUY_LAND", "SE"])
-                money -= 4000
                 num_quads += 1
 
         # 4. Zonal Seed Purchasing & Rolling Buffer (STRICTLY WHEAT, MELON, STRAWBERRY)
@@ -353,7 +351,7 @@ class MasterIndustrialAgent:
                     if c:
                         needed_counts[c] += 1
 
-            wheat_buffer = max(0, 15 - state.seeds.get("WHEAT", 0))
+            wheat_buffer = max(0, 10 - state.seeds.get("WHEAT", 0))
             if wheat_buffer > 0:
                 needed_counts["WHEAT"] += wheat_buffer
 
@@ -376,7 +374,7 @@ class MasterIndustrialAgent:
                         orders.append(["BUY_SEED", crop, batch])
                         spendable -= seed_cost * batch
 
-        # 5. Shed Inventory Liquidation (Reserve 15 Wheat for feed & 4 Fertilizer for premium crops)
+        # 5. Shed Inventory Liquidation (Reserve 8 Wheat for feed & 4 Fertilizer for premium crops)
         for product in PRODUCTS:
             if len(orders) >= max_orders:
                 break
@@ -385,8 +383,8 @@ class MasterIndustrialAgent:
                 continue
 
             if product == "WHEAT" and day < 29:
-                if qty > 15:
-                    orders.append(["SELL", "WHEAT", min(qty - 15, 20)])
+                if qty > 8:
+                    orders.append(["SELL", "WHEAT", min(qty - 8, 20)])
                 continue
 
             if product == "FERTILIZER" and day < 28:
@@ -398,9 +396,15 @@ class MasterIndustrialAgent:
                 orders.append(["SELL", product, qty])
                 continue
             cur_inv = state.market_inv.get(product, 10000)
-            safe_q = get_safe_sell_quantity(product, cur_inv, qty, rem_days)
-            if safe_q > 0:
-                orders.append(["SELL", product, safe_q])
+            safe_qty = get_safe_sell_quantity(
+                product=product,
+                current_inv=cur_inv,
+                available_in_shed=qty,
+                remaining_days=rem_days,
+            )
+
+            if safe_qty > 0:
+                orders.append(["SELL", product, safe_qty])
 
         return orders[:max_orders]
 
@@ -409,8 +413,6 @@ class MasterIndustrialAgent:
         day = state.day
         rem_days = state.remaining_days
         unlocked_set = set(state.get_all_unlocked_coords())
-
-        # Active livestock exclusively in NW
         active_livestock = dict(LIVESTOCK_TILES["NW"])
 
         urgent_water = set(state.get_urgent_water_tiles())
@@ -441,10 +443,11 @@ class MasterIndustrialAgent:
             inv_w = state.inventories[w_idx] if w_idx < len(state.inventories) else {}
             has_fert = inv_w.get("FERTILIZER", 0) > 0
 
-            # --- A. Farmer Special: Pickup Animal / Fertilizer from Shed ---
-            if w_idx == 0 and day <= 24:
+            # --- A. Farmer Special: Setup animals & Feed Pickup ---
+            if w_idx == 0 and day <= 28:
                 has_animal_in_inv = any(inv_w.get(a, 0) > 0 for a in ["COW", "SHEEP"])
                 has_animal_in_shed = any(state.shed.get(a, 0) > 0 for a in ["COW", "SHEEP"])
+                needs_feed_count = sum(1 for p in active_livestock if isinstance(state.get_tile(*p), dict) and state.get_tile(*p).get("animal") and not state.get_tile(*p).get("fed_today", False))
 
                 if not has_animal_in_inv and has_animal_in_shed:
                     if w_pos == (4, 4):
@@ -470,12 +473,18 @@ class MasterIndustrialAgent:
                                     elif isinstance(tile, dict) and tile.get("animal") is None:
                                         action = ["PLACE", anim]
                                 break
+                
+                # If standing at shed and animals need food, pick up wheat!
+                elif w_pos == (4, 4) and needs_feed_count > 0 and inv_w.get("WHEAT", 0) < needs_feed_count and state.shed.get("WHEAT", 0) > 0:
+                    pickup_n = min(needs_feed_count - inv_w.get("WHEAT", 0), state.shed.get("WHEAT", 0))
+                    if pickup_n > 0:
+                        action = ["PICKUP", "WHEAT", pickup_n]
 
             # --- B. Livestock Care on Standing Plot ---
             if action is None and w_pos in active_livestock and w_pos not in assigned_targets:
                 req_struct, req_animal = active_livestock[w_pos]
                 if isinstance(tile, dict) and tile.get("animal"):
-                    if not tile.get("fed_today", False) and w_pos not in fed_animals_today and (state.shed.get("WHEAT", 0) > 0 or inv_w.get("WHEAT", 0) > 0):
+                    if not tile.get("fed_today", False) and w_pos not in fed_animals_today and inv_w.get("WHEAT", 0) > 0:
                         action = ["FEED"]
                         fed_animals_today.add(w_pos)
                         assigned_targets.add(w_pos)
@@ -523,11 +532,9 @@ class MasterIndustrialAgent:
                     action = ["DIG"]
                     assigned_targets.add(w_pos)
 
-            # --- D. BFS Navigation ---
+            # --- D. Navigation Target Assignment ---
             if action is None:
                 best_target = None
-
-                # On Day 30, MASS HARVEST IS ABSOLUTE TOP PRIORITY FOR ALL 13 WORKERS!
                 if day >= 30 or (day >= 26 and day != 28):
                     p_harv_local = [p for p in harvestable if p not in assigned_targets and state.get_quadrant_for_pos(*p) == assigned_quad]
                     p_harv_any = [p for p in harvestable if p not in assigned_targets]
@@ -535,7 +542,6 @@ class MasterIndustrialAgent:
                     if p_harv:
                         best_target = min(p_harv, key=lambda p: abs(p[0] - w_pos[0]) + abs(p[1] - w_pos[1]))
 
-                # Priority 0: Livestock needs (Right next to Shed!)
                 if not best_target and w_idx == 0:
                     for l_pos in active_livestock:
                         if l_pos not in assigned_targets and l_pos not in fed_animals_today:
@@ -545,13 +551,11 @@ class MasterIndustrialAgent:
                                     best_target = l_pos
                                     break
 
-                # Priority 1: Urgent water (prevent withering)
                 if not best_target and day <= 29:
                     p0 = [p for p in urgent_water if p not in assigned_targets]
                     if p0:
                         best_target = min(p0, key=lambda p: abs(p[0] - w_pos[0]) + abs(p[1] - w_pos[1]))
 
-                # Priority 2: Ready harvests
                 if not best_target:
                     p1_local = [p for p in harvestable if p not in assigned_targets and state.get_quadrant_for_pos(*p) == assigned_quad]
                     p1_any = [p for p in harvestable if p not in assigned_targets]
@@ -559,7 +563,6 @@ class MasterIndustrialAgent:
                     if p1:
                         best_target = min(p1, key=lambda p: abs(p[0] - w_pos[0]) + abs(p[1] - w_pos[1]))
 
-                # Priority 3: Targeted Fertilization of Premium Crops if carrying fertilizer
                 if not best_target and has_fert and day <= 27:
                     p_fert_local = [p for p in unfertilized_premium if p not in assigned_targets and p not in fertilized_today and state.get_quadrant_for_pos(*p) == assigned_quad]
                     p_fert_any = [p for p in unfertilized_premium if p not in assigned_targets and p not in fertilized_today]
@@ -567,7 +570,6 @@ class MasterIndustrialAgent:
                     if p_fert:
                         best_target = min(p_fert, key=lambda p: abs(p[0] - w_pos[0]) + abs(p[1] - w_pos[1]))
 
-                # Priority 4: CLEAR WEEDS in assigned quadrant
                 if not best_target and weeds:
                     p_weed_local = [p for p in weeds if p not in assigned_targets and state.get_quadrant_for_pos(*p) == assigned_quad]
                     p_weed_any = [p for p in weeds if p not in assigned_targets]
@@ -575,7 +577,6 @@ class MasterIndustrialAgent:
                     if p_weed:
                         best_target = min(p_weed, key=lambda p: abs(p[0] - w_pos[0]) + abs(p[1] - w_pos[1]))
 
-                # Priority 5: EMPTY TILES in assigned quadrant (Plant 100% of farm on Day 28 Wheat Blitz!)
                 if not best_target and (day <= 25 or day == 28) and sum(available_seeds.values()) > 0:
                     p3_local = [p for p in empty if p not in assigned_targets and state.get_quadrant_for_pos(*p) == assigned_quad]
                     p3_any = [p for p in empty if p not in assigned_targets]
@@ -583,7 +584,6 @@ class MasterIndustrialAgent:
                     if p3:
                         best_target = min(p3, key=lambda p: abs(p[0] - w_pos[0]) + abs(p[1] - w_pos[1]))
 
-                # Priority 6: Routine daily water
                 if not best_target and day <= 29:
                     p2_local = [p for p in routine_water if p not in assigned_targets and state.get_quadrant_for_pos(*p) == assigned_quad]
                     p2_any = [p for p in routine_water if p not in assigned_targets]
@@ -600,9 +600,9 @@ class MasterIndustrialAgent:
 
             worker_actions.append(action)
 
-        farmer_act = worker_actions[0] if worker_actions else ["PASS"]
-        hands_act = worker_actions[1:] if len(worker_actions) > 1 else []
-        return farmer_act, hands_act
+        farmer_action = worker_actions[0] if worker_actions else ["PASS"]
+        hands_actions = worker_actions[1:] if len(worker_actions) > 1 else []
+        return farmer_action, hands_actions
 
 
 _master_agent = MasterIndustrialAgent()

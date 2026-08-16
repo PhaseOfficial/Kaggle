@@ -45,3 +45,16 @@ MARKET_PARAMS = {
     "WOOL": {"base": 200, "I0": 10000, "T": 105, "below_func": "log", "below_target": 0.2, "above_func": "sq", "above_target": 3.2},
     "FERTILIZER": {"base": 100, "I0": 10000, "T": 200, "below_func": "linear", "below_target": 0.4, "above_func": "linear", "above_target": 0.4},
 }
+
+SHOPS = {
+    "BAKERY": ["EGG", "WHEAT"],
+    "PIZZA_SHOP": ["MILK", "TOMATO", "WHEAT"],
+    "BRUNCH_SPOT": ["EGG", "WHEAT", "STRAWBERRY"],
+    "YARN_STORE": ["WOOL"],
+    "ICE_CREAM_SHOP": ["STRAWBERRY", "MILK", "WHEAT"],
+    "PET_CAFE": ["CARROT"],
+    "SMOOTHIE_SHOP": ["STRAWBERRY", "MILK"],
+    "FARMERS_MARKET": ["WHEAT", "CARROT", "TOMATO", "STRAWBERRY"],
+}
+
+SINGLE_PRODUCT_SHOPS = {"YARN_STORE", "PET_CAFE"}
