@@ -1,4 +1,4 @@
-"""Multi-worker spatial task coordinator: Plot 1 livestock hugging Shed (4, 4), Targeted Fertilizer Application, Plot 2 Watermelons, Day 28 empty-tile wheat blitz, Day 30 mass harvest."""
+"""Multi-worker spatial task coordinator: Strictly Wheat, Melon, and Strawberry after Melon."""
 
 from collections import deque
 from src.constants import CROPS, LIVESTOCK_PLOTS
@@ -75,7 +75,7 @@ class MultiWorkerDispatcher:
         worker_actions = []
         available_seeds = dict(self.state.seeds)
 
-        for w_idx, w_pos in enumerate(self.workers):
+        for w_idx, w_pos in enumerate(workers):
             tile = self.state.get_tile(*w_pos)
             action = None
             assigned_quad = worker_quad_map.get(w_idx, "NW")
@@ -152,13 +152,10 @@ class MultiWorkerDispatcher:
                         chosen_crop = pref_crop
                     elif available_seeds.get("WHEAT", 0) > 0:
                         chosen_crop = "WHEAT"
-                    elif available_seeds.get("CARROT", 0) > 0:
-                        chosen_crop = "CARROT"
-                    else:
-                        for s_name, s_count in available_seeds.items():
-                            if s_count > 0:
-                                chosen_crop = s_name
-                                break
+                    elif available_seeds.get("STRAWBERRY", 0) > 0:
+                        chosen_crop = "STRAWBERRY"
+                    elif available_seeds.get("MELON", 0) > 0:
+                        chosen_crop = "MELON"
                     if chosen_crop:
                         action = ["PLANT", chosen_crop]
                         available_seeds[chosen_crop] -= 1

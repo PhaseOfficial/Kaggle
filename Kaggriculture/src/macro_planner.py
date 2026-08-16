@@ -1,4 +1,4 @@
-"""Macro-Economic Planner: Plot 1 livestock (2 Cows, 2 Sheep) & ongoing crops, Plot 2 Watermelons, Day 28 empty-tile Wheat Blitz, Targeted Fertilizer Buffer."""
+"""Macro-Economic Planner: Strictly Wheat, Melon, and Strawberry after Melon."""
 
 from collections import Counter
 from src.constants import CROPS, PRODUCTS, LIVESTOCK_PLOTS, NW_WHEAT_TILES
@@ -22,9 +22,7 @@ def get_target_crop_for_pos(pos: tuple[int, int], remaining_days: int, day: int)
         if day <= 10:
             return "MELON"
         elif day <= 25:
-            if (pos[0] + pos[1]) % 2 == 0:
-                return "STRAWBERRY"
-            return "TOMATO"
+            return "STRAWBERRY"  # Plant Strawberry after Melon!
         return "WHEAT"
 
     # Plot 2 (NE): Covers x in [5, 9], y in [0, 4] -> HIGH-YIELD WATERMELON PRODUCTION (Days 0-19)
@@ -33,21 +31,15 @@ def get_target_crop_for_pos(pos: tuple[int, int], remaining_days: int, day: int)
             if (pos[0] + pos[1]) % 4 != 0:
                 return "MELON"
             return "WHEAT"
-        elif day <= 21 and remaining_days >= 8:
-            return "TOMATO"
         return "WHEAT"
 
-    # Plot 3 (SW): Covers x in [0, 4], y in [5, 9] -> 100% 2-day rapid turnover mix (Wheat 60% & Carrot 40%)
+    # Plot 3 (SW): Covers x in [0, 4], y in [5, 9] -> Wheat
     if pos[0] < 5 and pos[1] >= 5:
-        if (pos[0] + pos[1]) % 2 == 1:
-            return "WHEAT"
-        return "CARROT"
+        return "WHEAT"
 
-    # Plot 4 (SE): Covers x in [5, 9], y in [5, 9] -> 100% 2-day rapid turnover mix (Wheat 60% & Carrot 40%)
+    # Plot 4 (SE): Covers x in [5, 9], y in [5, 9] -> Wheat
     if pos[0] >= 5 and pos[1] >= 5:
-        if (pos[0] + pos[1]) % 2 == 1:
-            return "WHEAT"
-        return "CARROT"
+        return "WHEAT"
 
     return "WHEAT"
 
@@ -111,7 +103,7 @@ class ZonalMacroPlanner:
                 money -= 4000
                 num_quads += 1
 
-        # 4. Zonal Seed Purchasing & Rolling Buffer
+        # 4. Zonal Seed Purchasing & Rolling Buffer (STRICTLY WHEAT, MELON, STRAWBERRY)
         if day <= 28 and len(orders) < max_orders:
             empty_tiles = self.state.get_empty_tiles()
             weed_tiles = self.state.get_weed_tiles()
@@ -132,7 +124,7 @@ class ZonalMacroPlanner:
 
             spendable = max(0, money - 200) if day < 26 else money
 
-            ordered_crops = ["WHEAT", "MELON", "STRAWBERRY", "TOMATO", "CARROT"]
+            ordered_crops = ["WHEAT", "MELON", "STRAWBERRY"]
             for crop in ordered_crops:
                 if len(orders) >= max_orders:
                     break
@@ -149,7 +141,7 @@ class ZonalMacroPlanner:
                         orders.append(["BUY_SEED", crop, batch])
                         spendable -= seed_cost * batch
 
-        # 5. Shed Inventory Liquidation (Reserve 15 Wheat for animal feed & 4 Fertilizer for premium crops)
+        # 5. Shed Inventory Liquidation (Reserve 15 Wheat for feed & 4 Fertilizer for premium crops)
         for product in PRODUCTS:
             if len(orders) >= max_orders:
                 break
@@ -163,7 +155,6 @@ class ZonalMacroPlanner:
                 continue
 
             if product == "FERTILIZER" and day < 28:
-                # Keep a small buffer of 4 fertilizers for Melons/Strawberries/Tomatoes
                 if qty > 4:
                     orders.append(["SELL", "FERTILIZER", qty - 4])
                 continue

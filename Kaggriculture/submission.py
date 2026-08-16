@@ -1,20 +1,20 @@
 """
-Master Industrial & Livestock Farm Agent for Kaggriculture with Targeted Fertilizer Application.
+Master Industrial & Livestock Farm Agent for Kaggriculture.
 Features:
+- Pure Wheat, Melon, and Strawberry Crop Portfolio:
+  - Melons on early cycles (Days 0-10) -> Strawberries (Days 11-25) as the primary ongoing multi-harvest engine!
+  - 7 Dedicated Wheat coordinates on Plot 1 (NW) for continuous animal feed & liquidity.
+  - Day 28 Whole-Farm Wheat Blitz (Empty Tiles Only) for Day 30 mass harvest.
+  - No Tomatoes, No Carrots - strictly Wheat, Melon, and Strawberry.
 - Ultra-Compact Livestock Hub Hugging Shed (4, 4) in Plot 1 (NW):
   - 2 Cows at (4, 3) and (3, 4)
   - 2 Sheep at (3, 3) and (2, 4)
   - Produces 4 free daily Fertilizers ($400/day) + steady Milk & Wool!
 - Targeted Fertilizer Engine:
-  - Free fertilizers collected from livestock are applied directly to high-value Melons, Strawberries, and Tomatoes to double yield!
-  - Surplus fertilizers beyond a 4-unit working buffer are liquidated on the market for $100 cash per unit!
-- Plot 1 (NW) Multi-Stage Crop Engine:
-  - 7 dedicated Wheat tiles for guaranteed feed & liquidity
-  - 14 Dynamic Crop Tiles: Initial Melons (Days 0-10) -> High-value ongoing Strawberries & Tomatoes (Days 11-25)
-- Plot 2 (NE) Crop Engine: High-Yield Watermelon Production (80% Melons on Days 0-19 -> $1,500/tile)
-- Plot 3 (SW) & Plot 4 (SE) Blitz: 100% Whole-Plot 25-Tile Seeding (Wheat 60% & Carrot 40%)
-- Day 28 Whole-Farm Wheat Blitz (Empty Tiles Only): All available empty tiles across the entire farm are seeded with 2-day Wheat without disturbing ongoing Strawberries/Tomatoes!
-- Day 30 Grand Mass Harvest & 100% Shed Liquidation: All 13 workers sweep the entire farm, converting all crops to pure bank cash!
+  - Free fertilizers collected from livestock are applied directly to Melons and Strawberries to double yields!
+  - Surplus fertilizers beyond a 4-unit working buffer are sold on the market for $100 cash per unit!
+- Day 30 Grand Mass Harvest & 100% Shed Liquidation:
+  - All 13 workers sweep the entire farm, converting all crops and shed items to pure bank cash!
 """
 
 import math
@@ -194,7 +194,7 @@ class FarmState:
             t = self.get_tile(x, y)
             if isinstance(t, dict) and t.get("kind") == "PLANT":
                 crop = t.get("crop")
-                if crop in ("MELON", "STRAWBERRY", "TOMATO"):
+                if crop in ("MELON", "STRAWBERRY"):
                     if t.get("fertilized_until_day", 0) <= self.day:
                         unfertilized.append((x, y))
         return unfertilized
@@ -262,9 +262,7 @@ def get_target_crop_for_pos(pos: tuple[int, int], remaining_days: int, day: int)
         if day <= 10:
             return "MELON"
         elif day <= 25:
-            if (pos[0] + pos[1]) % 2 == 0:
-                return "STRAWBERRY"
-            return "TOMATO"
+            return "STRAWBERRY"  # Plant Strawberry after Melon!
         return "WHEAT"
 
     # Plot 2 (NE): Covers x in [5, 9], y in [0, 4] -> HIGH-YIELD WATERMELON PRODUCTION (Days 0-19)
@@ -273,21 +271,15 @@ def get_target_crop_for_pos(pos: tuple[int, int], remaining_days: int, day: int)
             if (pos[0] + pos[1]) % 4 != 0:
                 return "MELON"
             return "WHEAT"
-        elif day <= 21 and remaining_days >= 8:
-            return "TOMATO"
         return "WHEAT"
 
-    # Plot 3 (SW): Covers x in [0, 4], y in [5, 9] -> 100% 2-day rapid turnover mix (Wheat 60% & Carrot 40%)
+    # Plot 3 (SW): Covers x in [0, 4], y in [5, 9] -> Wheat
     if pos[0] < 5 and pos[1] >= 5:
-        if (pos[0] + pos[1]) % 2 == 1:
-            return "WHEAT"
-        return "CARROT"
+        return "WHEAT"
 
-    # Plot 4 (SE): Covers x in [5, 9], y in [5, 9] -> 100% 2-day rapid turnover mix (Wheat 60% & Carrot 40%)
+    # Plot 4 (SE): Covers x in [5, 9], y in [5, 9] -> Wheat
     if pos[0] >= 5 and pos[1] >= 5:
-        if (pos[0] + pos[1]) % 2 == 1:
-            return "WHEAT"
-        return "CARROT"
+        return "WHEAT"
 
     return "WHEAT"
 
@@ -346,7 +338,7 @@ class MasterIndustrialAgent:
                 money -= 4000
                 num_quads += 1
 
-        # 4. Zonal Seed Purchasing & Rolling Buffer
+        # 4. Zonal Seed Purchasing & Rolling Buffer (STRICTLY WHEAT, MELON, STRAWBERRY)
         if day <= 28 and len(orders) < max_orders:
             empty_tiles = state.get_empty_tiles()
             weed_tiles = state.get_weed_tiles()
@@ -367,7 +359,7 @@ class MasterIndustrialAgent:
 
             spendable = max(0, money - 200) if day < 26 else money
 
-            ordered_crops = ["WHEAT", "MELON", "STRAWBERRY", "TOMATO", "CARROT"]
+            ordered_crops = ["WHEAT", "MELON", "STRAWBERRY"]
             for crop in ordered_crops:
                 if len(orders) >= max_orders:
                     break
@@ -519,13 +511,10 @@ class MasterIndustrialAgent:
                         chosen_crop = pref_crop
                     elif available_seeds.get("WHEAT", 0) > 0:
                         chosen_crop = "WHEAT"
-                    elif available_seeds.get("CARROT", 0) > 0:
-                        chosen_crop = "CARROT"
-                    else:
-                        for s_name, s_count in available_seeds.items():
-                            if s_count > 0:
-                                chosen_crop = s_name
-                                break
+                    elif available_seeds.get("STRAWBERRY", 0) > 0:
+                        chosen_crop = "STRAWBERRY"
+                    elif available_seeds.get("MELON", 0) > 0:
+                        chosen_crop = "MELON"
                     if chosen_crop:
                         action = ["PLANT", chosen_crop]
                         available_seeds[chosen_crop] -= 1
