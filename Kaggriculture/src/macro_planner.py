@@ -1,4 +1,4 @@
-"""Macro-Economic Planner: Plot 1 livestock (2 Cows, 2 Sheep), 7 Wheat, initial Melons -> Strawberries/Tomatoes after first harvest."""
+"""Macro-Economic Planner: Plot 1 livestock (2 Cows, 2 Sheep) & ongoing crops, Plot 2 Watermelons, Day 28 empty-tile Wheat Blitz, Targeted Fertilizer Buffer."""
 
 from collections import Counter
 from src.constants import CROPS, PRODUCTS, LIVESTOCK_PLOTS, NW_WHEAT_TILES
@@ -7,18 +7,21 @@ from src.market_model import get_safe_sell_quantity
 
 
 def get_target_crop_for_pos(pos: tuple[int, int], remaining_days: int, day: int) -> str | None:
-    if remaining_days <= 3 or day >= 26:
+    # 1. Day 28 Whole-Farm Wheat Blitz (Empty tiles only): 2-day fast turnover harvest on Day 30!
+    if day == 28:
+        return "WHEAT"
+
+    # Strict Cutoffs
+    if day >= 29 or (day >= 26 and day != 28) or remaining_days <= 1:
         return None
 
     # Plot 1 (NW): x < 5 and y < 5
     if pos[0] < 5 and pos[1] < 5:
-        # 1. 7 Dedicated Wheat coordinates
         if pos in NW_WHEAT_TILES:
             return "WHEAT"
-        # 2. Remaining 14 tiles: Initial Melons -> after first Melon harvest (Day 10+), shift to Strawberries & Tomatoes!
         if day <= 10:
             return "MELON"
-        elif day <= 21:
+        elif day <= 25:
             if (pos[0] + pos[1]) % 2 == 0:
                 return "STRAWBERRY"
             return "TOMATO"
@@ -50,7 +53,7 @@ def get_target_crop_for_pos(pos: tuple[int, int], remaining_days: int, day: int)
 
 
 class ZonalMacroPlanner:
-    """Manages full-farm budget, continuous daily hiring, livestock procurement, and liquidation."""
+    """Manages full-farm budget, continuous daily hiring, livestock procurement, fertilizer management, and liquidation."""
 
     def __init__(self, state: FarmState):
         self.state = state
@@ -66,13 +69,13 @@ class ZonalMacroPlanner:
         # 1. CONTINUOUS WORKFORCE HIRING
         target_hires = 5 if num_quads == 1 else (8 if num_quads == 2 else (10 if num_quads == 3 else 12))
         needed_hires = max(0, target_hires - self.state.hires_today)
-        if day <= 27 and money >= 12 and needed_hires > 0:
+        if day <= 29 and money >= 12 and needed_hires > 0:
             for _ in range(needed_hires):
                 if len(orders) >= max_orders:
                     break
                 orders.append(["HIRE"])
 
-        # 2. Livestock Purchasing Queue (2 Cows -> 2 Sheep in NW)
+        # 2. Livestock Purchasing Queue (2 Cows -> 2 Sheep strictly on Plot 1 NW)
         target_cows = 2
         target_sheep = 2
 
@@ -81,13 +84,11 @@ class ZonalMacroPlanner:
 
         # Procure animals on Day 2+ once wheat feed is available
         if (day >= 2 or self.state.shed.get("WHEAT", 0) >= 5) and day <= 20 and len(orders) < max_orders:
-            # 2 Cows ($400 each)
             while total_cows_held < target_cows and money >= 500 and len(orders) < max_orders:
                 orders.append(["BUY_ANIMAL", "COW", 1])
                 money -= 400
                 total_cows_held += 1
 
-            # 2 Sheep ($500 each)
             while total_sheep_held < target_sheep and money >= 600 and len(orders) < max_orders:
                 orders.append(["BUY_ANIMAL", "SHEEP", 1])
                 money -= 500
@@ -95,7 +96,7 @@ class ZonalMacroPlanner:
 
         all_plot1_fully_stocked = (total_cows_held >= target_cows and total_sheep_held >= target_sheep)
 
-        # 3. Cyclic Land Expansion with Zero-Loss Protection (ONLY IF PLOT 1 HAS ALL 4 LIVESTOCK SLOTS FILLED)
+        # 3. Cyclic Land Expansion with Zero-Loss Protection (Plot 1 must have 4 animals stocked)
         if day <= 23 and len(orders) < max_orders and all_plot1_fully_stocked:
             if "NE" not in self.state.unlocked_quadrants and money >= 4000 and day <= 16:
                 orders.append(["BUY_LAND", "NE"])
@@ -111,21 +112,27 @@ class ZonalMacroPlanner:
                 num_quads += 1
 
         # 4. Zonal Seed Purchasing & Rolling Buffer
-        if day <= 25 and len(orders) < max_orders:
+        if day <= 28 and len(orders) < max_orders:
             empty_tiles = self.state.get_empty_tiles()
             weed_tiles = self.state.get_weed_tiles()
             needed_counts = Counter()
-            for pos in empty_tiles + weed_tiles:
-                c = get_target_crop_for_pos(pos, rem_days, day)
-                if c:
-                    needed_counts[c] += 1
+
+            if day in (27, 28):
+                total_empty = len(empty_tiles) + len(weed_tiles)
+                needed_counts["WHEAT"] = max(needed_counts["WHEAT"], total_empty + 10)
+            else:
+                for pos in empty_tiles + weed_tiles:
+                    c = get_target_crop_for_pos(pos, rem_days, day)
+                    if c:
+                        needed_counts[c] += 1
+
             wheat_buffer = max(0, 15 - self.state.seeds.get("WHEAT", 0))
             if wheat_buffer > 0:
                 needed_counts["WHEAT"] += wheat_buffer
 
             spendable = max(0, money - 200) if day < 26 else money
 
-            ordered_crops = ["MELON", "STRAWBERRY", "TOMATO", "WHEAT", "CARROT"]
+            ordered_crops = ["WHEAT", "MELON", "STRAWBERRY", "TOMATO", "CARROT"]
             for crop in ordered_crops:
                 if len(orders) >= max_orders:
                     break
@@ -142,7 +149,7 @@ class ZonalMacroPlanner:
                         orders.append(["BUY_SEED", crop, batch])
                         spendable -= seed_cost * batch
 
-        # 5. Shed Inventory Liquidation (Reserve 15 Wheat for animal feed)
+        # 5. Shed Inventory Liquidation (Reserve 15 Wheat for animal feed & 4 Fertilizer for premium crops)
         for product in PRODUCTS:
             if len(orders) >= max_orders:
                 break
@@ -150,12 +157,18 @@ class ZonalMacroPlanner:
             if qty <= 0:
                 continue
 
-            if product == "WHEAT" and day < 28:
+            if product == "WHEAT" and day < 29:
                 if qty > 15:
                     orders.append(["SELL", "WHEAT", min(qty - 15, 20)])
                 continue
 
-            if day >= 27 or rem_days <= 3:
+            if product == "FERTILIZER" and day < 28:
+                # Keep a small buffer of 4 fertilizers for Melons/Strawberries/Tomatoes
+                if qty > 4:
+                    orders.append(["SELL", "FERTILIZER", qty - 4])
+                continue
+
+            if day >= 29 or rem_days <= 2:
                 orders.append(["SELL", product, qty])
                 continue
             cur_inv = self.state.market_inv.get(product, 10000)
