@@ -49,6 +49,7 @@ def save_html_replay(env, output_html: str):
 def simulate_and_visualize(
     opponent: str = "starter",
     steps: int = 720,
+    seed: int = 499739352,
     output_html: str = "replay.html",
     auto_open: bool = True,
     p0_my_agent: bool = True,
@@ -64,11 +65,15 @@ def simulate_and_visualize(
 
     print(f"Player 0: {p0_name}")
     print(f"Player 1: {p1_name}")
-    print(f"Match Length: {steps} steps ({steps // 24} days)")
+    print(f"Match Length: {steps} steps ({steps // 24} days) | Random Seed: {seed}")
     print("-" * 70)
     print("Simulating match in headless environment...")
 
-    env = kaggle_environments.make("kaggriculture", configuration={"episodeSteps": steps}, debug=False)
+    config = {"episodeSteps": steps}
+    if seed is not None:
+        config["randomSeed"] = seed
+
+    env = kaggle_environments.make("kaggriculture", configuration=config, debug=False)
     env.run([p0_agent, p1_agent])
 
     # Check match outcome
@@ -136,6 +141,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Kaggriculture Visual Match Simulator")
     parser.add_argument("--opp", default="starter", help="Opponent: 'starter', 'pass', or a python file path")
     parser.add_argument("--steps", type=int, default=720, help="Number of match steps (default: 720 = 30 days)")
+    parser.add_argument("--seed", type=int, default=499739352, help="Random seed (default: 499739352)")
     parser.add_argument("--out", default="replay.html", help="Output HTML file path (default: replay.html)")
     parser.add_argument("--no-open", action="store_true", help="Do not automatically launch browser")
     parser.add_argument("--p1", action="store_true", help="Play MyAgent as Player 1 instead of Player 0")
@@ -144,6 +150,7 @@ if __name__ == "__main__":
     simulate_and_visualize(
         opponent=args.opp,
         steps=args.steps,
+        seed=args.seed,
         output_html=args.out,
         auto_open=not args.no_open,
         p0_my_agent=not args.p1,

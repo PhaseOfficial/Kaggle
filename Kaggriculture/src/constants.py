@@ -14,20 +14,21 @@ ANIMALS = {
     "SHEEP": {"cost": 500, "structure": "PASTURE", "first_yield_day": 6, "interval": 3, "product": "WOOL"},
 }
 
-# 6 Dedicated Livestock Plots ONLY in the First Plot (NW). Expansion plots (NE, SW, SE) are 100% crops!
+# 4 Livestock Plots in First Plot (NW): 2 Cows and 2 Sheep. Expansion plots (NE, SW, SE) are 100% crops!
 LIVESTOCK_PLOTS = {
     "NW": {
-        (4, 3): ("COOP", "GOOSE"),
         (3, 4): ("PASTURE", "COW"),
-        (3, 3): ("PASTURE", "SHEEP"),
         (4, 2): ("PASTURE", "COW"),
-        (2, 4): ("PASTURE", "COW"),
+        (3, 3): ("PASTURE", "SHEEP"),
         (3, 2): ("PASTURE", "SHEEP"),
     },
     "NE": {},
     "SW": {},
     "SE": {},
 }
+
+# 7 Dedicated Wheat Coordinates in Plot 1 (NW)
+NW_WHEAT_TILES = {(4, 3), (2, 4), (1, 4), (0, 4), (4, 1), (4, 0), (2, 3)}
 
 PRODUCTS = ["WHEAT", "CARROT", "TOMATO", "STRAWBERRY", "MELON", "EGG", "MILK", "WOOL", "FERTILIZER"]
 PRICE_FLOOR = 1
