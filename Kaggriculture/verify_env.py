@@ -1,6 +1,14 @@
 """Environment verification script for Kaggriculture."""
 import sys
 import platform
+import os
+
+# Ensure UTF-8 output where possible
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
 
 print("=" * 60)
 print("Verifying Kaggriculture Python Environment")
@@ -30,9 +38,9 @@ for module_name, display_name in packages:
     try:
         mod = __import__(module_name)
         ver = getattr(mod, "__version__", "available")
-        print(f"[✓] {display_name:<20} : {ver}")
+        print(f"[OK]   {display_name:<20} : {ver}")
     except ImportError as e:
-        print(f"[✗] {display_name:<20} : FAILED to import ({e})")
+        print(f"[FAIL] {display_name:<20} : FAILED to import ({e})")
         all_passed = False
 
 print("-" * 60)
@@ -40,8 +48,13 @@ print("-" * 60)
 # Check Kaggle Environments capabilities
 try:
     import kaggle_environments
-    envs = kaggle_environments.environments
-    print(f"Available kaggle-environments: {list(envs.keys())}")
+    envs = list(kaggle_environments.environments.keys())
+    print(f"Registered kaggle-environments: {len(envs)} environments available")
+    print(f"Sample envs: {envs[:10]}")
+    if "kaggriculture" in envs:
+        print("[OK]   kaggriculture is registered in kaggle_environments!")
+    else:
+        print("[INFO] kaggriculture environment will be loaded directly or via local package")
 except Exception as e:
     print(f"kaggle-environments check note: {e}")
 
