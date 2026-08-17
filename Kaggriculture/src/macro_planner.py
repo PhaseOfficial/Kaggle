@@ -1,9 +1,21 @@
-"""Macro-Economic Planner: Strictly Wheat, Melon, and Strawberry after Melon."""
+"""Macro-Economic Planner: Strictly Wheat, Melon, and Strawberry after Melon with Fibonacci Hiring."""
 
 from collections import Counter
 from src.constants import CROPS, PRODUCTS, LIVESTOCK_PLOTS, NW_WHEAT_TILES
 from src.state import FarmState
 from src.market_model import get_safe_sell_quantity
+
+FIBONACCI_COSTS = [1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377]
+
+
+def get_hire_cost(n: int) -> int:
+    """Returns the Fibonacci hiring cost for the n-th hand today (0-indexed)."""
+    if n < len(FIBONACCI_COSTS):
+        return FIBONACCI_COSTS[n]
+    a, b = FIBONACCI_COSTS[-2], FIBONACCI_COSTS[-1]
+    for _ in range(n - len(FIBONACCI_COSTS) + 1):
+        a, b = b, a + b
+    return b
 
 
 def get_target_crop_for_pos(pos: tuple[int, int], remaining_days: int, day: int) -> str | None:
@@ -22,7 +34,7 @@ def get_target_crop_for_pos(pos: tuple[int, int], remaining_days: int, day: int)
         if day <= 10:
             return "MELON"
         elif day <= 25:
-            return "STRAWBERRY"  # Plant Strawberry after Melon (fertilized by nearby animals!)
+            return "STRAWBERRY"
         return "WHEAT"
 
     # Plot 2 (NE): Covers x in [5, 9], y in [0, 4] -> HIGH-YIELD WATERMELON PRODUCTION (Days 0-19)
@@ -47,7 +59,7 @@ def get_target_crop_for_pos(pos: tuple[int, int], remaining_days: int, day: int)
 
 
 class ZonalMacroPlanner:
-    """Manages full-farm budget, continuous daily hiring, livestock procurement, fertilizer management, and liquidation."""
+    """Manages full-farm budget, Fibonacci daily hiring, livestock procurement, fertilizer management, and liquidation."""
 
     def __init__(self, state: FarmState):
         self.state = state
@@ -60,23 +72,42 @@ class ZonalMacroPlanner:
         rem_days = self.state.remaining_days
         num_quads = len(self.state.unlocked_quadrants)
 
-        # 1. CONTINUOUS WORKFORCE HIRING
-        target_hires = 5 if num_quads == 1 else (7 if num_quads == 2 else 9)
-        needed_hires = max(0, target_hires - self.state.hires_today)
-        if day <= 29 and money >= 12 and needed_hires > 0:
-            for _ in range(needed_hires):
-                if len(orders) >= max_orders:
-                    break
-                orders.append(["HIRE"])
+        # -------------------------------------------------------------
+        # 1. FIBONACCI DYNAMIC WORKFORCE HIRING
+        # -------------------------------------------------------------
+        base_hires = 5 if num_quads == 1 else (7 if num_quads == 2 else 9)
+        harvestable_count = len(self.state.get_harvestable_tiles())
 
-        # 2. Livestock Purchasing Queue (2 Cows -> 2 Sheep strictly on Plot 1 NW)
+        if harvestable_count >= 15 and money >= 1000:
+            base_hires = min(base_hires + 1, 10)
+        if harvestable_count >= 25 and money >= 3000:
+            base_hires = min(base_hires + 1, 11)
+
+        if day <= 3:
+            base_hires = min(base_hires, 5)
+        elif money < 300:
+            base_hires = min(base_hires, 5)
+
+        current_hires = self.state.hires_today
+        while current_hires < base_hires and len(orders) < max_orders:
+            cost = get_hire_cost(current_hires)
+            reserve = 200 if day < 26 else 0
+            if money >= cost and (money - cost) >= reserve:
+                orders.append(["HIRE"])
+                money -= cost
+                current_hires += 1
+            else:
+                break
+
+        # -------------------------------------------------------------
+        # 2. LIVESTOCK PROCUREMENT
+        # -------------------------------------------------------------
         target_cows = 2
         target_sheep = 2
 
         total_cows_held = sum(1 for p, info in LIVESTOCK_PLOTS["NW"].items() if info[1] == "COW" and isinstance(self.state.get_tile(*p), dict) and self.state.get_tile(*p).get("animal") == "COW") + self.state.shed.get("COW", 0) + sum(inv.get("COW", 0) for inv in self.state.inventories)
         total_sheep_held = sum(1 for p, info in LIVESTOCK_PLOTS["NW"].items() if info[1] == "SHEEP" and isinstance(self.state.get_tile(*p), dict) and self.state.get_tile(*p).get("animal") == "SHEEP") + self.state.shed.get("SHEEP", 0) + sum(inv.get("SHEEP", 0) for inv in self.state.inventories)
 
-        # Procure animals on Day 1+ once wheat feed is available
         if (day >= 1 or self.state.shed.get("WHEAT", 0) >= 3) and day <= 20 and len(orders) < max_orders:
             while total_cows_held < target_cows and money >= 500 and len(orders) < max_orders:
                 orders.append(["BUY_ANIMAL", "COW", 1])
@@ -90,7 +121,9 @@ class ZonalMacroPlanner:
 
         all_plot1_fully_stocked = (total_cows_held >= target_cows and total_sheep_held >= target_sheep)
 
-        # 3. Controlled Land Expansion (NE and SW only with Capital Protection)
+        # -------------------------------------------------------------
+        # 3. CONTROLLED LAND EXPANSION
+        # -------------------------------------------------------------
         if day <= 20 and len(orders) < max_orders and all_plot1_fully_stocked:
             if "NE" not in self.state.unlocked_quadrants and money >= 2500 and day <= 8:
                 orders.append(["BUY_LAND", "NE"])
@@ -101,7 +134,9 @@ class ZonalMacroPlanner:
                 money -= 2000
                 num_quads += 1
 
-        # 4. Zonal Seed Purchasing & Rolling Buffer (STRICTLY WHEAT, MELON, STRAWBERRY)
+        # -------------------------------------------------------------
+        # 4. ZONAL SEED PURCHASING
+        # -------------------------------------------------------------
         if day <= 28 and len(orders) < max_orders:
             empty_tiles = self.state.get_empty_tiles()
             weed_tiles = self.state.get_weed_tiles()
@@ -122,8 +157,7 @@ class ZonalMacroPlanner:
 
             spendable = max(0, money - 200) if day < 26 else money
 
-            ordered_crops = ["WHEAT", "MELON", "STRAWBERRY"]
-            for crop in ordered_crops:
+            for crop in ["WHEAT", "MELON", "STRAWBERRY"]:
                 if len(orders) >= max_orders:
                     break
                 count = needed_counts.get(crop, 0)
@@ -139,7 +173,9 @@ class ZonalMacroPlanner:
                         orders.append(["BUY_SEED", crop, batch])
                         spendable -= seed_cost * batch
 
-        # 5. Shed Inventory Liquidation (Reserve 8 Wheat for feed & 4 Fertilizer for premium crops)
+        # -------------------------------------------------------------
+        # 5. SHED INVENTORY LIQUIDATION
+        # -------------------------------------------------------------
         for product in PRODUCTS:
             if len(orders) >= max_orders:
                 break
