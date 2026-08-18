@@ -14,21 +14,31 @@ ANIMALS = {
     "SHEEP": {"cost": 500, "structure": "PASTURE", "first_yield_day": 6, "interval": 3, "product": "WOOL"},
 }
 
-# 4 Livestock Plots directly surrounding Shed (4, 4) in Plot 1 (NW): 2 Cows and 2 Sheep
+# 12 Livestock Plots: Plot 1 (NW) + Plot 2 (NE)
 LIVESTOCK_PLOTS = {
     "NW": {
-        (4, 3): ("PASTURE", "COW"),     # 1 step North of Shed (4, 4)
-        (3, 4): ("PASTURE", "COW"),     # 1 step West of Shed (4, 4)
-        (3, 3): ("PASTURE", "SHEEP"),   # 1 step Northwest of Shed (4, 4)
-        (2, 4): ("PASTURE", "SHEEP"),   # 2 steps West of Shed (4, 4)
+        (4, 4): ("PASTURE", "COW"),     # Cow 1: Directly on (4, 4)
+        (4, 3): ("PASTURE", "COW"),     # Cow 2: 1 step North (4, 3)
+        (4, 2): ("PASTURE", "COW"),     # Cow 3: 2 steps North (4, 2)
+        (2, 4): ("PASTURE", "COW"),     # Cow 4: 2 steps West (2, 4)
+        (3, 4): ("PASTURE", "SHEEP"),   # Sheep 1: 1 step West (3, 4)
+        (3, 3): ("PASTURE", "SHEEP"),   # Sheep 2: 1 step Northwest (3, 3)
     },
-    "NE": {},
+    "NE": {
+        (5, 4): ("PASTURE", "COW"),     # Cow 5: Directly on (5, 4)
+        (5, 3): ("PASTURE", "COW"),     # Cow 6: 1 step North (5, 3)
+        (5, 2): ("PASTURE", "COW"),     # Cow 7: 2 steps North (5, 2)
+        (7, 4): ("PASTURE", "COW"),     # Cow 8: 2 steps East (7, 4)
+        (6, 4): ("PASTURE", "SHEEP"),   # Sheep 3: 1 step East (6, 4)
+        (6, 3): ("PASTURE", "SHEEP"),   # Sheep 4: 1 step Northeast (6, 3)
+    },
     "SW": {},
     "SE": {},
 }
 
-# 7 Dedicated Wheat Coordinates in Plot 1 (NW)
-NW_WHEAT_TILES = {(1, 4), (0, 4), (4, 1), (4, 0), (2, 3), (1, 3), (3, 2)}
+# Dedicated Wheat Coordinates in Plot 1 (NW) and Plot 2 (NE) to sustain 12 animals
+NW_WHEAT_TILES = {(1, 4), (0, 4), (4, 1), (4, 0), (2, 3), (1, 3), (0, 3), (2, 2)}
+NE_WHEAT_TILES = {(8, 4), (9, 4), (5, 1), (5, 0), (7, 3), (8, 3), (9, 3), (7, 2)}
 
 PRODUCTS = ["WHEAT", "CARROT", "TOMATO", "STRAWBERRY", "MELON", "EGG", "MILK", "WOOL", "FERTILIZER"]
 PRICE_FLOOR = 1
